@@ -25,6 +25,8 @@ public final class Main {
     }
 
     private static void handleHealth(HttpExchange exchange) throws IOException {
+        logRequest(exchange);
+
         if (!"/health".equals(exchange.getRequestURI().getPath())) {
             sendJson(exchange, 404, "{\"error\":\"Not Found\"}");
             return;
@@ -37,6 +39,22 @@ public final class Main {
         }
 
         sendJson(exchange, 200, "{\"status\":\"UP\"}");
+    }
+
+    private static void logRequest(HttpExchange exchange) {
+        String userAgent = exchange.getRequestHeaders().getFirst("User-Agent");
+
+        if (userAgent == null) {
+            userAgent = "não informado";
+        }
+
+        System.out.printf(
+                "%s %s %s | User-Agent: %s%n",
+                exchange.getRequestMethod(),
+                exchange.getRequestURI(),
+                exchange.getProtocol(),
+                userAgent
+        );
     }
 
     private static void sendJson(HttpExchange exchange, int statusCode, String json)
