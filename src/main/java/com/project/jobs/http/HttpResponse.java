@@ -13,9 +13,33 @@ public final class HttpResponse {
 
     public static void sendJson(HttpExchange exchange, int statusCode, String json)
             throws IOException {
-        byte[] responseBody = json.getBytes(StandardCharsets.UTF_8);
+        send(
+                exchange,
+                statusCode,
+                "application/json; charset=UTF-8",
+                json
+        );
+    }
 
-        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+    public static void sendText(HttpExchange exchange, int statusCode, String text)
+            throws IOException {
+        send(
+                exchange,
+                statusCode,
+                "text/plain; charset=UTF-8",
+                text
+        );
+    }
+
+    private static void send(
+            HttpExchange exchange,
+            int statusCode,
+            String contentType,
+            String body
+    ) throws IOException {
+        byte[] responseBody = body.getBytes(StandardCharsets.UTF_8);
+
+        exchange.getResponseHeaders().set("Content-Type", contentType);
         exchange.sendResponseHeaders(statusCode, responseBody.length);
 
         try (OutputStream responseStream = exchange.getResponseBody()) {

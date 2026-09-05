@@ -1,5 +1,6 @@
 package com.project.jobs.http;
 
+import com.project.jobs.exception.InvalidRequestException;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
@@ -24,6 +25,18 @@ public final class Router implements HttpHandler {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
+        try {
+            route(exchange);
+        } catch (InvalidRequestException exception) {
+            logInvalidRequest(exchange, exception);
+            HttpResponse.sendJson(exchange, 400, "{\"error\":\"Bad Request\"}");
+        } catch (RuntimeException exception) {
+            logUnexpectedError(exchange, exception);
+            HttpResponse.sendJson(exchange, 500, "{\"error\":\"Internal Server Error\"}");
+        }
+    }
+
+    private void route(HttpExchange exchange) throws IOException {
         logRequest(exchange);
 
         String path = exchange.getRequestURI().getPath();
@@ -47,6 +60,38 @@ public final class Router implements HttpHandler {
         }
 
         handler.handle(exchange);
+    }
+
+    private void logInvalidRequest(
+            HttpExchange exchange,
+            InvalidRequestException exception
+    ) {
+        System.err.printf(
+                "Rejected request %s %s: %s%n",
+                exchange.getRequestMethod(),
+                exchange.getRequestURI(),
+                exception.getMessage()
+        );
+
+        if (exception.getCause() != null) {
+            System.err.printf(
+                    "Cause: %s: %s%n",
+                    exception.getCause().getClass().getSimpleName(),
+                    exception.getCause().getMessage()
+            );
+        }
+    }
+
+    private void logUnexpectedError(
+            HttpExchange exchange,
+            RuntimeException exception
+    ) {
+        System.err.printf(
+                "Unexpected error while handling %s %s%n",
+                exchange.getRequestMethod(),
+                exchange.getRequestURI()
+        );
+        exception.printStackTrace(System.err);
     }
 
     private void logRequest(HttpExchange exchange) {
