@@ -40,7 +40,7 @@ public final class Router implements HttpHandler {
         logRequest(exchange);
 
         String path = exchange.getRequestURI().getPath();
-        Map<String, HttpHandler> handlersByMethod = routes.get(path);
+        Map<String, HttpHandler> handlersByMethod = findHandlersByPath(path);
 
         if (handlersByMethod == null) {
             HttpResponse.sendJson(exchange, 404, "{\"error\":\"Not Found\"}");
@@ -109,4 +109,59 @@ public final class Router implements HttpHandler {
                 userAgent
         );
     }
+
+    private Map<String, HttpHandler> findHandlersByPath(String requestPath) {
+        Map<String, HttpHandler> exacMatch = routes.get(requestPath);
+
+        if (exacMatch != null) {
+            return exacMatch;
+        }
+
+        for (Map.Entry<String, Map<String, HttpHandler>> entry : routes.entrySet()) {
+            String routeTemplate = entry.getKey();
+
+            if (matchesPath(routeTemplate, requestPath)) {
+                return entry.getValue();
+            }
+        }
+
+        return null;
+
+    }
+
+    private boolean matchesPath(String routeTemplate, String requestPath) {
+        String[] templateSegments = routeTemplate.split("/", -1);
+        String[] requestSegments = requestPath.split("/", -1);
+
+        if (templateSegments.length != requestSegments.length) {
+            return false;
+        }
+
+        for (int index = 0; index < templateSegments.length; index++) {
+            String templateSegment = templateSegments[index];
+            String requestSegment = requestSegments[index];
+
+            if (isPathParameter(templateSegment)) {
+                if (requestSegment.isBlank()) {
+                    return false;
+                }
+                
+                continue;
+
+            }
+
+            if (!templateSegment.equals(requestSegment)) {
+                return false;
+            }
+
+        }
+
+        return true;
+
+    }
+
+    private boolean isPathParameter(String segment) {
+        return segment.startsWith("{") && segment.endsWith("}");
+    }
+
 }

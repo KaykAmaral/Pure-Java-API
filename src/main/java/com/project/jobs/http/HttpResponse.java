@@ -46,4 +46,10 @@ public final class HttpResponse {
             responseStream.write(responseBody);
         }
     }
+
+    public static void sendNoContent(HttpExchange exchange) throws IOException {
+        exchange.sendResponseHeaders(204, -1);
+        exchange.close();
+    }
+
 }
