@@ -29,4 +29,8 @@ public record Job(
                 JobStatus.PENDING
         );
     }
+
+    public Job withStatus(JobStatus newStatus) {
+        return new Job(id, type, content, newStatus);
+    }
 }
