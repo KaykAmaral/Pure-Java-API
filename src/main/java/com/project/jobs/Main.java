@@ -10,6 +10,9 @@ import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public final class Main {
 
@@ -22,7 +25,16 @@ public final class Main {
         HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 0);
 
         InMemoryJobRepository repository = new InMemoryJobRepository();
-        JobService service = new JobService(repository);
+        ExecutorService jobExecutor = Executors.newFixedThreadPool(2);
+        
+        Runtime.getRuntime().addShutdownHook(
+        new Thread(
+                () -> shutdownExecutor(jobExecutor),
+                "application-shutdown"
+        )
+        );
+
+        JobService service = new JobService(repository, jobExecutor);
         JobController jobController = new JobController(service);
 
         Router router = new Router();
@@ -40,6 +52,26 @@ public final class Main {
 
     private static void handleHealth(HttpExchange exchange) throws IOException {
         HttpResponse.sendJson(exchange, 200, "{\"status\":\"UP\"}");
+    }
+
+    private static void shutdownExecutor(ExecutorService executor) {
+        System.out.println("Encerrando executor de Jobs...");
+
+        executor.shutdown();
+
+        try {
+            boolean finished = executor.awaitTermination(5, TimeUnit.SECONDS);
+
+            if (!finished) {
+                System.out.println("Forçando encerramento das tarefas...");
+
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException exception) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
     }
 
 }

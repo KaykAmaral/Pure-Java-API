@@ -9,15 +9,22 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Executor;
 
 public final class JobService {
 
     private final InMemoryJobRepository repository;
+    private final Executor executor;
 
-    public JobService(InMemoryJobRepository repository) {
+    public JobService(InMemoryJobRepository repository, Executor executor) {
         this.repository = Objects.requireNonNull(
                 repository,
                 "repository must not be null"
+        );
+
+        this.executor = Objects.requireNonNull(
+            executor,
+            "executor must not be null"
         );
     }
 
@@ -51,12 +58,7 @@ public final class JobService {
     private void startProcessing(UUID id) {
         Runnable task = () -> process(id);
 
-        Thread worker = new Thread(
-            task,
-            "job-worker-" + id
-        );
-
-        worker.start();
+        executor.execute(task);
     }
 
     private void process(UUID id) {
