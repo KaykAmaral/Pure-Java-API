@@ -3,10 +3,11 @@ package com.project.jobs;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class RaceConditionExperiment {
 
-    private static int counter = 0;
+    private static final AtomicInteger counter = new AtomicInteger(0);
 
     private RaceConditionExperiment() {
     }
@@ -34,19 +35,18 @@ public final class RaceConditionExperiment {
                 TimeUnit.SECONDS
         );
 
+        int obtained = counter.get();
+
         System.out.println("Executor terminou: " + finished);
         System.out.println("Esperado: " + expected);
-        System.out.println("Obtido:   " + counter);
-        System.out.println("Perdidos: " + (expected - counter));
+        System.out.println("Obtido:   " + obtained);
+        System.out.println("Perdidos: " + (expected - obtained));
     }
 
     private static void incrementManyTimes(int amount) {
         for (int increment = 0; increment < amount; increment++) {
-            increment();
+            counter.incrementAndGet();
         }
     }
 
-    private static synchronized void increment() {
-        counter++;
-    }
 }
