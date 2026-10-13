@@ -81,18 +81,22 @@ public final class JobService {
             job -> job.withStatus(newStatus)
         );
 
+        Thread currentThread = Thread.currentThread();
+
         if (updatedJob.isEmpty()) {
             System.out.printf(
-                "[thread=%s] Job %s não encontrado%n",
-                Thread.currentThread().getName(),
+                "[thread=%s, virtual=%s] Job %s não encontrado%n",
+                currentThread,
+                currentThread.isVirtual(),
                 id
             );
             return;
         }
 
         System.out.printf(
-            "[thread=%s] Job %s -> %s%n",
-            Thread.currentThread().getName(),
+            "[thread=%s, virtual=%s] Job %s -> %s%n",
+            currentThread,
+            currentThread.isVirtual(),
             id,
             updatedJob.get().status()
         );

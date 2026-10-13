@@ -25,7 +25,7 @@ public final class Main {
         HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 0);
 
         InMemoryJobRepository repository = new InMemoryJobRepository();
-        ExecutorService jobExecutor = Executors.newFixedThreadPool(2);
+        ExecutorService jobExecutor = Executors.newVirtualThreadPerTaskExecutor();
         
         Runtime.getRuntime().addShutdownHook(
         new Thread(
