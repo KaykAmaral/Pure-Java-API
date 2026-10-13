@@ -76,28 +76,26 @@ public final class JobService {
     }
 
     private void updateStatus(UUID id, JobStatus newStatus) {
-        Optional<Job> possibleJob = repository.findById(id);
+        Optional<Job> updatedJob = repository.updateById(
+            id,
+            job -> job.withStatus(newStatus)
+        );
 
-        if (possibleJob.isEmpty()) {
+        if (updatedJob.isEmpty()) {
             System.out.printf(
-                    "[thread=%s] Job %s não encontrado%n",
-                    Thread.currentThread().getName(),
-                    id
+                "[thread=%s] Job %s não encontrado%n",
+                Thread.currentThread().getName(),
+                id
             );
             return;
         }
 
-        Job currentJob = possibleJob.get();
-        Job updatedJob = currentJob.withStatus(newStatus);
-
-        repository.save(updatedJob);
-
         System.out.printf(
-                "[thread=%s] Job %s -> %s%n",
-                Thread.currentThread().getName(),
-                id,
-                newStatus
+            "[thread=%s] Job %s -> %s%n",
+            Thread.currentThread().getName(),
+            id,
+            updatedJob.get().status()
         );
-}
+    }
 
 }

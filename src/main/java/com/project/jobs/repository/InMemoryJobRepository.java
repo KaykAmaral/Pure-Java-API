@@ -2,16 +2,17 @@ package com.project.jobs.repository;
 
 import com.project.jobs.model.Job;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.function.UnaryOperator;
 
 public final class InMemoryJobRepository {
 
-    private final Map<UUID, Job> jobsById = new HashMap<>();
+    private final ConcurrentMap<UUID, Job> jobsById = new ConcurrentHashMap<>();
 
     public Job save(Job job) {
         Objects.requireNonNull(job, "job must not be null");
@@ -34,5 +35,23 @@ public final class InMemoryJobRepository {
         Objects.requireNonNull(id, "id must not be null");
 
         return jobsById.remove(id) != null;
+    }
+
+    public Optional<Job> updateById(
+        UUID id,
+        UnaryOperator<Job> updateFunction
+    ) {
+        Objects.requireNonNull(id, "id must not be null");
+        Objects.requireNonNull(updateFunction, "updateFunction must not be null");
+
+        Job updatedJob = jobsById.computeIfPresent(
+            id,
+            (ignoredId, currentJob) -> Objects.requireNonNull(
+                updateFunction.apply(currentJob), "updated job must not be null"
+            )
+        );
+
+        return Optional.ofNullable(updatedJob);
+
     }
 }
