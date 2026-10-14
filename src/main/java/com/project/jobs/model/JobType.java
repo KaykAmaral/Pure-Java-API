@@ -1,5 +1,6 @@
 package com.project.jobs.model;
 
 public enum JobType {
-    WORD_COUNT
+    WORD_COUNT,
+    CHARACTER_COUNT
 }

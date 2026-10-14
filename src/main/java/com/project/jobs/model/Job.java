@@ -7,7 +7,8 @@ public record Job(
         UUID id,
         JobType type,
         String content,
-        JobStatus status
+        JobStatus status,
+        Integer result
 ) {
 
     public Job {
@@ -19,6 +20,12 @@ public record Job(
         if (content.isBlank()) {
             throw new IllegalArgumentException("content must not be blank");
         }
+
+        if (status == JobStatus.COMPLETED && result == null) {
+            throw new IllegalArgumentException(
+                "completed job must have a result"
+            );
+        }
     }
 
     public static Job pending(JobType type, String content) {
@@ -26,11 +33,16 @@ public record Job(
                 UUID.randomUUID(),
                 type,
                 content,
-                JobStatus.PENDING
+                JobStatus.PENDING,
+                null
         );
     }
 
     public Job withStatus(JobStatus newStatus) {
-        return new Job(id, type, content, newStatus);
+        return new Job(id, type, content, newStatus, result);
+    }
+
+    public Job complete(int newResult) {
+        return new Job(id, type, content, JobStatus.COMPLETED, newResult);
     }
 }

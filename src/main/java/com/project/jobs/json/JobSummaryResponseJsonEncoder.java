@@ -26,12 +26,21 @@ public final class JobSummaryResponseJsonEncoder {
     public static String encode(JobSummaryResponse response) {
         Objects.requireNonNull(response, "response must not be null");
 
+        if (response.result() == null) {
+            return """
+                    {"id":"%s","type":"%s","status":"%s"}
+                    """.formatted(
+                    response.id(),
+                    response.type(),
+                    response.status()).strip();
+        }
+
         return """
-                {"id":"%s","type":"%s","status":"%s"}
+                {"id":"%s","type":"%s","status":"%s","result":%d}
                 """.formatted(
                 response.id(),
                 response.type(),
-                response.status()
-        ).strip();
+                response.status(),
+                response.result()).strip();
     }
 }

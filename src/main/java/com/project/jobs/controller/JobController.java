@@ -64,7 +64,8 @@ public final class JobController {
                         new JobSummaryResponse(
                               job.id(),
                               job.type(), 
-                              job.status()
+                              job.status(),
+                              job.result()
                         )
                 );
         }
@@ -94,7 +95,8 @@ public final class JobController {
         JobSummaryResponse response = new JobSummaryResponse(
                 job.id(),
                 job.type(),
-                job.status()
+                job.status(),
+                job.result()
         );
 
         String responseJson = JobSummaryResponseJsonEncoder.encode(response);

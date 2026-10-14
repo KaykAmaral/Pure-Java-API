@@ -9,7 +9,8 @@ import java.util.UUID;
 public record JobSummaryResponse(
         UUID id,
         JobType type,
-        JobStatus status
+        JobStatus status,
+        Integer result
 ) {
 
     public JobSummaryResponse {

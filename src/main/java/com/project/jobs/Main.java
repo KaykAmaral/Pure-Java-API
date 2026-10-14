@@ -3,6 +3,10 @@ package com.project.jobs;
 import com.project.jobs.controller.JobController;
 import com.project.jobs.http.HttpResponse;
 import com.project.jobs.http.Router;
+import com.project.jobs.model.JobType;
+import com.project.jobs.processor.CharacterCountJobProcessor;
+import com.project.jobs.processor.JobProcessor;
+import com.project.jobs.processor.WordCountJobProcessor;
 import com.project.jobs.repository.InMemoryJobRepository;
 import com.project.jobs.service.JobService;
 import com.sun.net.httpserver.HttpExchange;
@@ -10,6 +14,7 @@ import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -34,7 +39,15 @@ public final class Main {
         )
         );
 
-        JobService service = new JobService(repository, jobExecutor);
+        Map<JobType, JobProcessor> processors = Map.of(
+            JobType.WORD_COUNT,
+            new WordCountJobProcessor(),
+
+            JobType.CHARACTER_COUNT,
+            new CharacterCountJobProcessor()
+        );
+
+        JobService service = new JobService(repository, jobExecutor, processors);
         JobController jobController = new JobController(service);
 
         Router router = new Router();
