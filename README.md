@@ -880,3 +880,100 @@ return switch (result) {
 Como `JobResult` é selada, o compilador conhece todas as possibilidades e o `switch` não precisa de `default`. Se um novo resultado for permitido futuramente, o compilador indicará os switches que precisam ser atualizados.
 
 Essa etapa reuniu recursos modernos do Java 21 com uma finalidade concreta: preservar significado, aumentar a segurança de tipos e detectar casos ausentes durante a compilação.
+
+---
+
+## Adicionando Thread-safe e job metrics endpoint
+
+### O que foi feito
+
+Foi criado o endpoint:
+
+```text
+GET /stats
+```
+
+Ele expõe métricas acumuladas durante a execução da aplicação:
+
+```json
+{
+  "submitted": 20,
+  "completed": 20,
+  "failed": 0
+}
+```
+
+As métricas foram isoladas na classe `JobStatistics`, representadas por `AtomicLong` e compartilhadas entre o `JobService` e o `StatsController`.
+
+Também foi criado um snapshot imutável para representar os valores observados no momento de cada consulta.
+
+### Pontos importantes
+
+Um contador comum não seria seguro para atualizações concorrentes:
+
+```java
+submitted++;
+```
+
+Essa expressão envolve leitura, incremento e escrita. Se duas Virtual Threads executarem essas etapas simultaneamente, uma atualização poderá sobrescrever a outra.
+
+Por isso, os contadores foram declarados como:
+
+```java
+private final AtomicLong submitted = new AtomicLong();
+private final AtomicLong completed = new AtomicLong();
+private final AtomicLong failed = new AtomicLong();
+```
+
+Os incrementos usam operações atômicas:
+
+```java
+submitted.incrementAndGet();
+completed.incrementAndGet();
+failed.incrementAndGet();
+```
+
+`AtomicLong` foi escolhido porque as métricas exigem incrementos simples e valores exatos. `LongAdder` poderia reduzir contenção em métricas atualizadas com frequência muito alta, mas sua leitura agrega várias células internas e não era necessária neste caso.
+
+O estado consultado é representado por um record:
+
+```java
+public record JobStatisticsSnapshot(
+        long submitted,
+        long completed,
+        long failed
+) {
+}
+```
+
+O snapshot é uma fotografia imutável. Cada `AtomicLong` é lido atomicamente, mas a leitura conjunta dos três contadores não forma uma transação única. Uma conclusão pode acontecer durante a construção do snapshot, o que é aceitável para métricas operacionais que serão atualizadas na consulta seguinte.
+
+A mesma instância de estatísticas é injetada nos dois componentes:
+
+```java
+JobStatistics statistics = new JobStatistics();
+
+JobService service = new JobService(
+        repository,
+        jobExecutor,
+        processors,
+        statistics
+);
+
+StatsController statsController =
+        new StatsController(statistics);
+```
+
+Se cada componente recebesse uma instância diferente, o controller consultaria contadores que nunca foram incrementados pelo serviço.
+
+As métricas terminais só são incrementadas depois que o repositório confirma a atualização:
+
+```java
+if (updateStatus(id, JobStatus.FAILED).isPresent()) {
+    statistics.recordFailed();
+}
+```
+
+Isso evita registrar uma falha fictícia caso o Job tenha sido excluído enquanto ainda estava sendo processado.
+
+As métricas são históricas e monotônicas. Excluir um Job não reduz `submitted`, `completed` ou `failed`, pois esses números representam eventos ocorridos desde a inicialização da aplicação, e não a quantidade atual de elementos no repositório.

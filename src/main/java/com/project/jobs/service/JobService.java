@@ -7,6 +7,7 @@ import com.project.jobs.model.JobType;
 import com.project.jobs.model.result.JobResult;
 import com.project.jobs.processor.JobProcessor;
 import com.project.jobs.repository.InMemoryJobRepository;
+import com.project.jobs.stats.JobStatistics;
 
 import java.util.List;
 import java.util.Map;
@@ -20,11 +21,13 @@ public final class JobService {
     private final InMemoryJobRepository repository;
     private final Executor executor;
     private final Map<JobType, JobProcessor<? extends JobResult>> processors;
+    private final JobStatistics statistics;
 
     public JobService(
             InMemoryJobRepository repository,
             Executor executor,
-            Map<JobType, JobProcessor<? extends JobResult>> processors
+            Map<JobType, JobProcessor<? extends JobResult>> processors,
+            JobStatistics statistics
     ) {
         this.repository = Objects.requireNonNull(
                 repository,
@@ -37,6 +40,10 @@ public final class JobService {
         Objects.requireNonNull(processors, "processors must not be null");
 
         this.processors = Map.copyOf(processors);
+        this.statistics = Objects.requireNonNull(
+                statistics,
+                "statistics must not be null"
+        );
     }
 
     public Job create(CreateJobRequest request) {
@@ -45,6 +52,7 @@ public final class JobService {
         Job job = repository.save(
                 Job.pending(request.type(), request.content()));
 
+        statistics.recordSubmitted();
         startProcessing(job.id());
 
         return job;
@@ -78,7 +86,7 @@ public final class JobService {
             Thread.sleep(3_000);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            updateStatus(id, JobStatus.FAILED);
+            failJob(id);
             return;
         }
 
@@ -98,7 +106,7 @@ public final class JobService {
                     "No processor registered for job type %s%n",
                     job.type());
 
-            updateStatus(id, JobStatus.FAILED);
+            failJob(id);
             return;
         }
 
@@ -111,11 +119,11 @@ public final class JobService {
                     id,
                     exception.getMessage());
 
-            updateStatus(id, JobStatus.FAILED);
+            failJob(id);
         }
     }
 
-    private void updateStatus(UUID id, JobStatus newStatus) {
+    private Optional<Job> updateStatus(UUID id, JobStatus newStatus) {
         Optional<Job> updatedJob = repository.updateById(
                 id,
                 job -> job.withStatus(newStatus));
@@ -128,7 +136,7 @@ public final class JobService {
                     currentThread,
                     currentThread.isVirtual(),
                     id);
-            return;
+            return Optional.empty();
         }
 
         System.out.printf(
@@ -137,6 +145,8 @@ public final class JobService {
                 currentThread.isVirtual(),
                 id,
                 updatedJob.get().status());
+
+        return updatedJob;
     }
 
     private void completeJob(UUID id, JobResult result) {
@@ -156,6 +166,8 @@ public final class JobService {
             return;
         }
 
+        statistics.recordCompleted();
+
         System.out.printf(
                 "[thread=%s, virtual=%s] Job %s -> COMPLETED, result=%s%n",
                 currentThread.getName(),
@@ -163,6 +175,12 @@ public final class JobService {
                 id,
                 result);
 
+    }
+
+    private void failJob(UUID id) {
+        if (updateStatus(id, JobStatus.FAILED).isPresent()) {
+            statistics.recordFailed();
+        }
     }
 
 }

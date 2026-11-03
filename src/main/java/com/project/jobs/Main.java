@@ -1,6 +1,7 @@
 package com.project.jobs;
 
 import com.project.jobs.controller.JobController;
+import com.project.jobs.controller.StatsController;
 import com.project.jobs.http.HttpResponse;
 import com.project.jobs.http.Router;
 import com.project.jobs.model.JobType;
@@ -10,6 +11,7 @@ import com.project.jobs.processor.JobProcessor;
 import com.project.jobs.processor.WordCountJobProcessor;
 import com.project.jobs.repository.InMemoryJobRepository;
 import com.project.jobs.service.JobService;
+import com.project.jobs.stats.JobStatistics;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -31,6 +33,7 @@ public final class Main {
         HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 0);
 
         InMemoryJobRepository repository = new InMemoryJobRepository();
+        JobStatistics statistics = new JobStatistics();
         ExecutorService jobExecutor = Executors.newVirtualThreadPerTaskExecutor();
         
         Runtime.getRuntime().addShutdownHook(
@@ -48,8 +51,14 @@ public final class Main {
             new CharacterCountJobProcessor()
         );
 
-        JobService service = new JobService(repository, jobExecutor, processors);
+        JobService service = new JobService(
+                repository,
+                jobExecutor,
+                processors,
+                statistics
+        );
         JobController jobController = new JobController(service);
+        StatsController statsController = new StatsController(statistics);
 
         Router router = new Router();
         router.addRoute("GET", "/health", Main::handleHealth);
@@ -57,6 +66,7 @@ public final class Main {
         router.addRoute("GET", "/jobs", jobController::findAll);
         router.addRoute("GET", "/jobs/{id}", jobController::findById);
         router.addRoute("DELETE", "/jobs/{id}", jobController::deleteById);
+        router.addRoute("GET", "/stats", statsController::get);
 
         server.createContext("/", router);
         server.start();
