@@ -977,3 +977,96 @@ if (updateStatus(id, JobStatus.FAILED).isPresent()) {
 Isso evita registrar uma falha fictícia caso o Job tenha sido excluído enquanto ainda estava sendo processado.
 
 As métricas são históricas e monotônicas. Excluir um Job não reduz `submitted`, `completed` ou `failed`, pois esses números representam eventos ocorridos desde a inicialização da aplicação, e não a quantidade atual de elementos no repositório.
+
+---
+
+## Reporte periodico do status de job
+
+### O que foi feito
+
+Foi adicionado um relatório periódico das estatísticas da aplicação usando `ScheduledExecutorService`.
+
+O relatório é executado inicialmente depois de cinco segundos e, a partir daí, aguarda dez segundos após o término de cada execução antes de executar novamente:
+
+```text
+[thread=stats-reporter, virtual=false]
+Stats: submitted=4, completed=4, failed=0
+```
+
+A tarefa foi encapsulada em `JobStatisticsReporter`, enquanto o `Main` ficou responsável por criar, configurar e encerrar o scheduler.
+
+### Pontos importantes
+
+`ScheduledExecutorService` estende `ExecutorService` e adiciona operações baseadas em tempo:
+
+```java
+schedule(task, delay, unit);
+scheduleAtFixedRate(task, initialDelay, period, unit);
+scheduleWithFixedDelay(task, initialDelay, delay, unit);
+```
+
+As três operações possuem comportamentos diferentes:
+
+- `schedule` executa uma vez depois do atraso;
+- `scheduleAtFixedRate` tenta manter uma frequência baseada no horário planejado de início;
+- `scheduleWithFixedDelay` começa a contar o próximo intervalo depois que a execução anterior termina.
+
+Para o relatório foi escolhido:
+
+```java
+statisticsScheduler.scheduleWithFixedDelay(
+        new JobStatisticsReporter(statistics),
+        5,
+        10,
+        TimeUnit.SECONDS
+);
+```
+
+Essa opção é adequada para tarefas de manutenção e observação nas quais não é necessário tentar recuperar execuções atrasadas.
+
+O scheduler utiliza uma única Platform Thread nomeada:
+
+```java
+ThreadFactory statisticsThreadFactory = Thread
+        .ofPlatform()
+        .name("stats-reporter")
+        .factory();
+
+ScheduledExecutorService statisticsScheduler =
+        Executors.newSingleThreadScheduledExecutor(
+                statisticsThreadFactory
+        );
+```
+
+Virtual Threads continuam sendo usadas para os Jobs, que representam várias tarefas independentes e potencialmente bloqueantes. O scheduler possui apenas um worker permanente que controla o tempo e executa uma tarefa curta, portanto uma Platform Thread é suficiente e torna essa decisão explícita.
+
+O reporter implementa `Runnable`:
+
+```java
+public final class JobStatisticsReporter implements Runnable {
+    @Override
+    public void run() {
+        // captura e imprime o snapshot
+    }
+}
+```
+
+Uma particularidade importante de tarefas periódicas é que, se uma execução lançar uma exception não tratada, as próximas execuções daquela tarefa são suprimidas. Por isso o reporter impede que uma `RuntimeException` escape:
+
+```java
+try {
+    JobStatisticsSnapshot snapshot = statistics.snapshot();
+    // imprime o relatório
+} catch (RuntimeException exception) {
+    // registra a falha sem cancelar as próximas execuções
+}
+```
+
+O scheduler possui ciclo de vida próprio. O shutdown hook passou a encerrar os dois executores:
+
+```text
+Encerrando statistics scheduler...
+Encerrando job executor...
+```
+
+Assim como no executor de Jobs, o encerramento deixa de aceitar novas tarefas, aguarda as existentes por um período limitado e força a parada se necessário.

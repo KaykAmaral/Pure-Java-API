@@ -12,6 +12,7 @@ import com.project.jobs.processor.WordCountJobProcessor;
 import com.project.jobs.repository.InMemoryJobRepository;
 import com.project.jobs.service.JobService;
 import com.project.jobs.stats.JobStatistics;
+import com.project.jobs.stats.JobStatisticsReporter;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -20,11 +21,15 @@ import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 public final class Main {
 
     private static final int PORT = 8080;
+    private static final long STATISTICS_INITIAL_DELAY_SECONDS = 5;
+    private static final long STATISTICS_DELAY_SECONDS = 10;
 
     private Main() {
     }
@@ -35,12 +40,35 @@ public final class Main {
         InMemoryJobRepository repository = new InMemoryJobRepository();
         JobStatistics statistics = new JobStatistics();
         ExecutorService jobExecutor = Executors.newVirtualThreadPerTaskExecutor();
-        
+
+        ThreadFactory statisticsThreadFactory = Thread
+                .ofPlatform()
+                .name("stats-reporter")
+                .factory();
+
+        ScheduledExecutorService statisticsScheduler =
+                Executors.newSingleThreadScheduledExecutor(
+                        statisticsThreadFactory
+                );
+
+        statisticsScheduler.scheduleWithFixedDelay(
+                new JobStatisticsReporter(statistics),
+                STATISTICS_INITIAL_DELAY_SECONDS,
+                STATISTICS_DELAY_SECONDS,
+                TimeUnit.SECONDS
+        );
+
         Runtime.getRuntime().addShutdownHook(
-        new Thread(
-                () -> shutdownExecutor(jobExecutor),
-                "application-shutdown"
-        )
+                new Thread(
+                        () -> {
+                            shutdownExecutor(
+                                    statisticsScheduler,
+                                    "statistics scheduler"
+                            );
+                            shutdownExecutor(jobExecutor, "job executor");
+                        },
+                        "application-shutdown"
+                )
         );
 
         Map<JobType, JobProcessor<? extends JobResult>> processors = Map.of(
@@ -78,8 +106,11 @@ public final class Main {
         HttpResponse.sendJson(exchange, 200, "{\"status\":\"UP\"}");
     }
 
-    private static void shutdownExecutor(ExecutorService executor) {
-        System.out.println("Encerrando executor de Jobs...");
+    private static void shutdownExecutor(
+            ExecutorService executor,
+            String executorName
+    ) {
+        System.out.printf("Encerrando %s...%n", executorName);
 
         executor.shutdown();
 
@@ -87,7 +118,10 @@ public final class Main {
             boolean finished = executor.awaitTermination(5, TimeUnit.SECONDS);
 
             if (!finished) {
-                System.out.println("Forçando encerramento das tarefas...");
+                System.out.printf(
+                        "Forçando encerramento de %s...%n",
+                        executorName
+                );
 
                 executor.shutdownNow();
             }
