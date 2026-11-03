@@ -4,6 +4,7 @@ import com.project.jobs.controller.JobController;
 import com.project.jobs.http.HttpResponse;
 import com.project.jobs.http.Router;
 import com.project.jobs.model.JobType;
+import com.project.jobs.model.result.JobResult;
 import com.project.jobs.processor.CharacterCountJobProcessor;
 import com.project.jobs.processor.JobProcessor;
 import com.project.jobs.processor.WordCountJobProcessor;
@@ -39,7 +40,7 @@ public final class Main {
         )
         );
 
-        Map<JobType, JobProcessor> processors = Map.of(
+        Map<JobType, JobProcessor<? extends JobResult>> processors = Map.of(
             JobType.WORD_COUNT,
             new WordCountJobProcessor(),
 

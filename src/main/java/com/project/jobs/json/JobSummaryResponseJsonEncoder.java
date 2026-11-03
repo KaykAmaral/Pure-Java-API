@@ -1,6 +1,9 @@
 package com.project.jobs.json;
 
 import com.project.jobs.dto.JobSummaryResponse;
+import com.project.jobs.model.result.CharacterCountResult;
+import com.project.jobs.model.result.JobResult;
+import com.project.jobs.model.result.WordCountResult;
 
 import java.util.List;
 import java.util.Objects;
@@ -32,8 +35,11 @@ public final class JobSummaryResponseJsonEncoder {
                     """.formatted(
                     response.id(),
                     response.type(),
-                    response.status()).strip();
+                    response.status()
+            ).strip();
         }
+
+        int resultValue = extractResultValue(response.result());
 
         return """
                 {"id":"%s","type":"%s","status":"%s","result":%d}
@@ -41,6 +47,18 @@ public final class JobSummaryResponseJsonEncoder {
                 response.id(),
                 response.type(),
                 response.status(),
-                response.result()).strip();
+                resultValue
+        ).strip();
     }
+
+    private static int extractResultValue(JobResult result) {
+    return switch (result) {
+            case WordCountResult wordCount ->
+                    wordCount.value();
+
+            case CharacterCountResult characterCount ->
+                    characterCount.value();
+        };
+    }
+
 }

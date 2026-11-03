@@ -3,12 +3,14 @@ package com.project.jobs.model;
 import java.util.Objects;
 import java.util.UUID;
 
+import com.project.jobs.model.result.JobResult;
+
 public record Job(
         UUID id,
         JobType type,
         String content,
         JobStatus status,
-        Integer result
+        JobResult result
 ) {
 
     public Job {
@@ -42,7 +44,15 @@ public record Job(
         return new Job(id, type, content, newStatus, result);
     }
 
-    public Job complete(int newResult) {
-        return new Job(id, type, content, JobStatus.COMPLETED, newResult);
+    public Job complete(JobResult newResult) {
+    Objects.requireNonNull(newResult, "newResult must not be null");
+
+    return new Job(
+            id,
+            type,
+            content,
+            JobStatus.COMPLETED,
+            newResult
+        );
     }
 }

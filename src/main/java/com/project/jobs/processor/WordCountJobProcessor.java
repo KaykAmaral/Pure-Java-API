@@ -1,19 +1,21 @@
 package com.project.jobs.processor;
 
+import com.project.jobs.model.result.WordCountResult;
+
 import java.util.Objects;
 
-public final class WordCountJobProcessor implements JobProcessor {
+public final class WordCountJobProcessor implements JobProcessor<WordCountResult> {
 
-    @Override 
-    public int process(String content) {
+    @Override
+    public WordCountResult process(String content) {
         Objects.requireNonNull(content, "content must not be null");
 
         if (content.isBlank()) {
-            return 0;
+            return new WordCountResult(0);
         }
 
-        return content.trim().split("\\s+").length;
+        int count = content.trim().split("\\s+").length;
 
+        return new WordCountResult(count);
     }
-
 }

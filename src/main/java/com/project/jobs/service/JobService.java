@@ -4,6 +4,7 @@ import com.project.jobs.dto.CreateJobRequest;
 import com.project.jobs.model.Job;
 import com.project.jobs.model.JobStatus;
 import com.project.jobs.model.JobType;
+import com.project.jobs.model.result.JobResult;
 import com.project.jobs.processor.JobProcessor;
 import com.project.jobs.repository.InMemoryJobRepository;
 
@@ -18,9 +19,13 @@ public final class JobService {
 
     private final InMemoryJobRepository repository;
     private final Executor executor;
-    private final Map<JobType, JobProcessor> processors;
+    private final Map<JobType, JobProcessor<? extends JobResult>> processors;
 
-    public JobService(InMemoryJobRepository repository, Executor executor, Map<JobType, JobProcessor> processors) {
+    public JobService(
+            InMemoryJobRepository repository,
+            Executor executor,
+            Map<JobType, JobProcessor<? extends JobResult>> processors
+    ) {
         this.repository = Objects.requireNonNull(
                 repository,
                 "repository must not be null");
@@ -85,7 +90,8 @@ public final class JobService {
 
         Job job = possibleJob.get();
 
-        JobProcessor processor = processors.get(job.type());
+        JobProcessor<? extends JobResult> processor =
+                processors.get(job.type());
 
         if (processor == null) {
             System.err.printf(
@@ -97,7 +103,7 @@ public final class JobService {
         }
 
         try {
-            int result = processor.process(job.content());
+            JobResult result = processor.process(job.content());
             completeJob(id, result);
         } catch (RuntimeException exception) {
             System.err.printf(
@@ -133,10 +139,11 @@ public final class JobService {
                 updatedJob.get().status());
     }
 
-    private void completeJob(UUID id, int result) {
+    private void completeJob(UUID id, JobResult result) {
         Optional<Job> updatedJob = repository.updateById(
-                id,
-                job -> job.complete(result));
+            id,
+            job -> job.complete(result)
+        );
 
         Thread currentThread = Thread.currentThread();
 
@@ -150,7 +157,7 @@ public final class JobService {
         }
 
         System.out.printf(
-                "[thread=%s, virtual=%s] Job %s -> COMPLETED, result=%d%n",
+                "[thread=%s, virtual=%s] Job %s -> COMPLETED, result=%s%n",
                 currentThread.getName(),
                 currentThread.isVirtual(),
                 id,

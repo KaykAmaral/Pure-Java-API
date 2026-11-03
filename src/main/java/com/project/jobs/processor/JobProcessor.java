@@ -1,7 +1,9 @@
 package com.project.jobs.processor;
 
-public interface JobProcessor {
-    
-    int process(String content);
+import com.project.jobs.model.result.JobResult;
+
+public interface JobProcessor<R extends JobResult> {
+
+    R process(String content);
 
 }
