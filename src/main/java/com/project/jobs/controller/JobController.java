@@ -3,8 +3,10 @@ package com.project.jobs.controller;
 import com.project.jobs.dto.CreateJobRequest;
 import com.project.jobs.dto.CreateJobResponse;
 import com.project.jobs.dto.JobSummaryResponse;
+import com.project.jobs.dto.JobSearchCriteria;
 import com.project.jobs.exception.InvalidRequestException;
 import com.project.jobs.http.HttpResponse;
+import com.project.jobs.http.JobSearchCriteriaDecoder;
 import com.project.jobs.json.CreateJobRequestJsonDecoder;
 import com.project.jobs.json.CreateJobResponseJsonEncoder;
 import com.project.jobs.json.JobSummaryResponseJsonEncoder;
@@ -15,7 +17,6 @@ import com.sun.net.httpserver.HttpExchange;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -56,24 +57,29 @@ public final class JobController {
     }
 
     public void findAll(HttpExchange exchange) throws IOException {
-        List<Job> jobs = service.findAll();
-        List<JobSummaryResponse> responses = new ArrayList<>();
+        JobSearchCriteria criteria = JobSearchCriteriaDecoder.decode(
+                exchange.getRequestURI().getRawQuery()
+        );
 
-        for (Job job : jobs) {
-                responses.add(
-                        new JobSummaryResponse(
-                              job.id(),
-                              job.type(), 
-                              job.status(),
-                              job.result()
-                        )
-                );
-        }
+        List<JobSummaryResponse> responses = service
+                .findAll(criteria)
+                .stream()
+                .map(JobController::toSummaryResponse)
+                .toList();
 
         String responseJson = JobSummaryResponseJsonEncoder.encodeList(responses);
 
         HttpResponse.sendJson(exchange, 200, responseJson);
 
+    }
+
+    private static JobSummaryResponse toSummaryResponse(Job job) {
+        return new JobSummaryResponse(
+                job.id(),
+                job.type(),
+                job.status(),
+                job.result()
+        );
     }
 
     public void findById(HttpExchange exchange) throws IOException {

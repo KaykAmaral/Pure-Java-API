@@ -1070,3 +1070,96 @@ Encerrando job executor...
 ```
 
 Assim como no executor de Jobs, o encerramento deixa de aceitar novas tarefas, aguarda as existentes por um período limitado e força a parada se necessário.
+
+---
+
+## Filtros de pesquisa de Job
+
+### O que foi feito
+
+O endpoint de listagem passou a aceitar filtros opcionais por status e tipo:
+
+```text
+GET /jobs?status=COMPLETED
+GET /jobs?type=WORD_COUNT
+GET /jobs?status=COMPLETED&type=WORD_COUNT
+```
+
+Foi criado um decoder para transformar a query string HTTP em um `JobSearchCriteria` tipado. O `JobService` passou a aplicar os critérios com uma pipeline de Stream, e o controller passou a transformar os Jobs em DTOs usando `map`.
+
+### Pontos importantes
+
+Uma Stream não armazena os elementos. Ela descreve uma sequência de operações que será executada sobre uma fonte de dados:
+
+```java
+return repository.findAll()
+        .stream()
+        .filter(...)
+        .filter(...)
+        .toList();
+```
+
+Nesse fluxo:
+
+- `stream()` cria a pipeline sobre a snapshot do repositório;
+- o primeiro `filter` testa o status;
+- o segundo `filter` testa o tipo;
+- `toList()` executa a pipeline e produz o resultado.
+
+`filter` e `map` são operações intermediárias lazy. Elas não percorrem imediatamente a coleção. O processamento começa quando uma operação terminal, como `toList()`, solicita o resultado.
+
+Os filtros opcionais foram representados por:
+
+```java
+public record JobSearchCriteria(
+        Optional<JobStatus> status,
+        Optional<JobType> type
+) {
+}
+```
+
+Na pipeline, um critério ausente aceita todos os elementos:
+
+```java
+.filter(job -> criteria.status()
+        .map(status -> job.status() == status)
+        .orElse(true))
+```
+
+Quando há um status, `map` produz o resultado da comparação. Quando não há, `orElse(true)` faz o Job passar pelo filtro.
+
+No controller, `map` transforma cada objeto sem modificar o original:
+
+```java
+List<JobSummaryResponse> responses = service
+        .findAll(criteria)
+        .stream()
+        .map(JobController::toSummaryResponse)
+        .toList();
+```
+
+`map` não significa `Map<K, V>`. Em uma Stream, ele representa uma transformação de um tipo para outro:
+
+```text
+Job → JobSummaryResponse
+```
+
+O `toList()` moderno devolve uma lista não modificável. Se o código precisar adicionar ou remover elementos posteriormente, será necessário coletar em uma coleção mutável conscientemente.
+
+A query string é obtida separadamente do caminho:
+
+```java
+exchange.getRequestURI().getRawQuery();
+```
+
+Os componentes são decodificados com UTF-8:
+
+```java
+URLDecoder.decode(component, StandardCharsets.UTF_8);
+```
+
+O decoder rejeita parâmetros desconhecidos, duplicados, vazios, valores de enum inválidos e codificação URL malformada. Esses casos são convertidos pelo tratamento global em `400 Bad Request`.
+
+Não foi usado `parallelStream()`. A coleção é pequena e as operações de comparação são muito rápidas. Dividir o trabalho entre várias threads adicionaria coordenação e overhead sem benefício. Streams e paralelismo são conceitos separados: uma Stream comum já melhora a composição das operações sem executar em paralelo.
+
+Como a fonte vem de um `ConcurrentHashMap`, a API não promete uma ordem específica para os Jobs. A Stream não cria uma ordenação que não exista na fonte; seria necessário usar `sorted` com um critério explícito caso a ordem se tornasse parte do contrato.

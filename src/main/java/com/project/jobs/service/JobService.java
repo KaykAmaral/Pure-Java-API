@@ -1,6 +1,7 @@
 package com.project.jobs.service;
 
 import com.project.jobs.dto.CreateJobRequest;
+import com.project.jobs.dto.JobSearchCriteria;
 import com.project.jobs.model.Job;
 import com.project.jobs.model.JobStatus;
 import com.project.jobs.model.JobType;
@@ -59,8 +60,18 @@ public final class JobService {
 
     }
 
-    public List<Job> findAll() {
-        return repository.findAll();
+    public List<Job> findAll(JobSearchCriteria criteria) {
+        Objects.requireNonNull(criteria, "criteria must not be null");
+
+        return repository.findAll()
+                .stream()
+                .filter(job -> criteria.status()
+                        .map(status -> job.status() == status)
+                        .orElse(true))
+                .filter(job -> criteria.type()
+                        .map(type -> job.type() == type)
+                        .orElse(true))
+                .toList();
     }
 
     public Optional<Job> findById(UUID id) {
