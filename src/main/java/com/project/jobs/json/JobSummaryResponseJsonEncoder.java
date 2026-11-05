@@ -3,6 +3,7 @@ package com.project.jobs.json;
 import com.project.jobs.dto.JobSummaryResponse;
 import com.project.jobs.model.result.CharacterCountResult;
 import com.project.jobs.model.result.JobResult;
+import com.project.jobs.model.result.HttpStatusResult;
 import com.project.jobs.model.result.WordCountResult;
 
 import java.util.List;
@@ -58,6 +59,9 @@ public final class JobSummaryResponseJsonEncoder {
 
             case CharacterCountResult characterCount ->
                     characterCount.value();
+
+            case HttpStatusResult httpStatus ->
+                    httpStatus.value();
         };
     }
 

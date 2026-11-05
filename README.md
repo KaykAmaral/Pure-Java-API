@@ -1163,3 +1163,109 @@ O decoder rejeita parâmetros desconhecidos, duplicados, vazios, valores de enum
 Não foi usado `parallelStream()`. A coleção é pequena e as operações de comparação são muito rápidas. Dividir o trabalho entre várias threads adicionaria coordenação e overhead sem benefício. Streams e paralelismo são conceitos separados: uma Stream comum já melhora a composição das operações sem executar em paralelo.
 
 Como a fonte vem de um `ConcurrentHashMap`, a API não promete uma ordem específica para os Jobs. A Stream não cria uma ordenação que não exista na fonte; seria necessário usar `sorted` com um critério explícito caso a ordem se tornasse parte do contrato.
+
+---
+
+## HTTP status com HttpClient
+
+### O que foi feito
+
+Foi criado o tipo de Job `HTTP_STATUS`. Seu conteúdo é uma URL HTTP ou HTTPS, e seu resultado é o código de status devolvido pelo servidor remoto:
+
+```json
+{
+  "type": "HTTP_STATUS",
+  "content": "http://localhost:8080/health"
+}
+```
+
+Depois do processamento:
+
+```json
+{
+  "type": "HTTP_STATUS",
+  "status": "COMPLETED",
+  "result": 200
+}
+```
+
+Foram criados `HttpStatusJobProcessor` e `HttpStatusResult`. O novo resultado foi adicionado à hierarquia selada, e o encoder JSON foi atualizado para tratar o novo caso no pattern matching.
+
+### Pontos importantes
+
+O cliente HTTP moderno do JDK pertence ao pacote:
+
+```java
+java.net.http
+```
+
+Uma única instância de `HttpClient` é criada no `Main` e compartilhada:
+
+```java
+HttpClient httpClient = HttpClient
+        .newBuilder()
+        .connectTimeout(Duration.ofSeconds(3))
+        .followRedirects(HttpClient.Redirect.NORMAL)
+        .build();
+```
+
+`HttpClient` é imutável e thread-safe. Reutilizá-lo permite que sua implementação gerencie conexões e recursos internos, em vez de criar um cliente diferente para cada Job.
+
+Cada requisição também possui timeout próprio:
+
+```java
+HttpRequest request = HttpRequest
+        .newBuilder(uri)
+        .timeout(Duration.ofSeconds(5))
+        .GET()
+        .build();
+```
+
+O connect timeout limita a abertura da conexão. O request timeout limita o tempo da operação completa daquela requisição.
+
+A chamada usa a API bloqueante:
+
+```java
+HttpResponse<Void> response = httpClient.send(
+        request,
+        HttpResponse.BodyHandlers.discarding()
+);
+```
+
+`send()` bloqueia a thread até a resposta chegar. Isso combina bem com o modelo atual porque cada Job roda em uma Virtual Thread. Enquanto ela aguarda a rede, a JVM normalmente pode liberar sua carrier thread para outro trabalho.
+
+`sendAsync()` retornaria um `CompletableFuture`, mas acrescentaria composição assíncrona a um fluxo que já é linear e escalável com Virtual Threads. O recurso não foi usado apenas por existir.
+
+`BodyHandlers.discarding()` informa que o corpo não será armazenado. O Job precisa somente do código de status, portanto carregar todo o conteúdo remoto desperdiçaria memória e largura de banda interna.
+
+Um status HTTP de erro não representa necessariamente uma falha de transporte:
+
+```text
+resposta 404 recebida → Job COMPLETED com result 404
+timeout ou conexão recusada → Job FAILED
+```
+
+O servidor respondeu corretamente no caso do `404`; o código recebido é o resultado esperado do processamento.
+
+As APIs de rede lançam exceptions verificadas. `IOException` é convertida em `UncheckedIOException` para atravessar o contrato atual de `JobProcessor`, enquanto a interrupção restaura a flag da thread:
+
+```java
+catch (InterruptedException exception) {
+    Thread.currentThread().interrupt();
+    throw new IllegalStateException(...);
+}
+```
+
+O processador aceita apenas `http` e `https`, exige um host e rejeita URIs inválidas. Ainda assim, receber URLs arbitrárias cria risco de SSRF: um cliente pode tentar fazer o servidor acessar serviços internos. Uma aplicação de produção deve aplicar allowlist de hosts, redes e portas, além de regras para redirects e resolução DNS.
+
+O resultado foi incorporado à interface selada:
+
+```java
+public sealed interface JobResult permits
+        WordCountResult,
+        CharacterCountResult,
+        HttpStatusResult {
+}
+```
+
+Ao adicionar `HttpStatusResult`, o compilador exigiu um novo caso no `switch` exaustivo do encoder. Essa é uma demonstração prática da segurança oferecida por sealed types e pattern matching.

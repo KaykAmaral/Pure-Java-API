@@ -8,6 +8,7 @@ import com.project.jobs.model.JobType;
 import com.project.jobs.model.result.JobResult;
 import com.project.jobs.processor.CharacterCountJobProcessor;
 import com.project.jobs.processor.JobProcessor;
+import com.project.jobs.processor.HttpStatusJobProcessor;
 import com.project.jobs.processor.WordCountJobProcessor;
 import com.project.jobs.repository.InMemoryJobRepository;
 import com.project.jobs.service.JobService;
@@ -18,6 +19,8 @@ import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,6 +43,11 @@ public final class Main {
         InMemoryJobRepository repository = new InMemoryJobRepository();
         JobStatistics statistics = new JobStatistics();
         ExecutorService jobExecutor = Executors.newVirtualThreadPerTaskExecutor();
+        HttpClient httpClient = HttpClient
+                .newBuilder()
+                .connectTimeout(Duration.ofSeconds(3))
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build();
 
         ThreadFactory statisticsThreadFactory = Thread
                 .ofPlatform()
@@ -76,7 +84,10 @@ public final class Main {
             new WordCountJobProcessor(),
 
             JobType.CHARACTER_COUNT,
-            new CharacterCountJobProcessor()
+            new CharacterCountJobProcessor(),
+
+            JobType.HTTP_STATUS,
+            new HttpStatusJobProcessor(httpClient)
         );
 
         JobService service = new JobService(
